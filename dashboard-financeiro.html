@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard Financeiro</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root{
+  --orange:#ff8c00;
+  --orange-dark:#c76a00;
+  --bg:#0b0b0b;
+  --card:#141414;
+  --border:rgba(255,140,0,0.25);
+  --text:#f5f5f5;
+}
+
+*{box-sizing:border-box}
+
+body{
+  font-family:'Segoe UI',Arial,sans-serif;
+  background:radial-gradient(circle at top,#1a1a1a,#050505 60%);
+  color:var(--text);
+  margin:0;
+  padding:16px;
+  overflow-x:hidden;
+}
+
+h1{
+  text-align:center;
+  background:linear-gradient(135deg,var(--orange),#ffb84d);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  margin-bottom:20px;
+}
+
+.container{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:16px;
+}
+
+.card{
+  background:linear-gradient(180deg,#171717,#0f0f0f);
+  border-radius:18px;
+  padding:16px;
+  border:1px solid var(--border);
+}
+
+input,select,button{
+  width:100%;
+  padding:10px;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:#0a0a0a;
+  color:#fff;
+  margin-bottom:8px;
+}
+
+button{
+  background:linear-gradient(135deg,var(--orange),var(--orange-dark));
+  color:#000;
+  font-weight:700;
+  cursor:pointer;
+}
+
+button.remove{
+  background:#2a2a2a;
+  color:#ffb84d;
+}
+
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+  display:block;
+  overflow-x:auto;
+}
+
+th,td{
+  padding:8px;
+  text-align:left;
+  white-space:nowrap;
+}
+
+canvas{
+  max-width:100%;
+  height:auto;
+  background:#0a0a0a;
+  border-radius:14px;
+  padding:10px;
+}
+
+progress{
+  width:100%;
+  height:14px;
+}
+</style>
+</head>
+
+<body>
+
+<h1>Dashboard Financeiro</h1>
+
+<div class="container">
+
+<div class="card">
+<h3>Lançamento</h3>
+<input type="text" id="descricao" placeholder="Descrição">
+<input type="number" id="valor" placeholder="Valor">
+<select id="tipo">
+  <option value="entrada">Entrada</option>
+  <option value="saida">Saída</option>
+</select>
+<select id="pessoa">
+  <option value="Samuel">Samuel</option>
+  <option value="Letícia">Letícia</option>
+</select>
+<button onclick="add()">Adicionar</button>
+
+<hr>
+
+<button onclick="filtroTipo='entrada';render()">Só Ganhos</button>
+<button onclick="filtroTipo='saida';render()">Só Gastos</button>
+<button onclick="filtroTipo='todos';render()">Todos</button>
+
+<hr>
+
+<button onclick="filtroPessoa='Samuel';render()">Samuel</button>
+<button onclick="filtroPessoa='Letícia';render()">Letícia</button>
+<button onclick="filtroPessoa='todos';render()">Ambos</button>
+
+<table>
+<thead>
+<tr><th>Pessoa</th><th>Desc</th><th>Valor</th><th>Tipo</th><th></th></tr>
+</thead>
+<tbody id="lista"></tbody>
+</table>
+</div>
+
+<div class="card">
+<h3>Ganhos x Gastos</h3>
+<canvas id="grafico"></canvas>
+</div>
+
+<div class="card">
+<h3>Reserva</h3>
+<input type="number" id="metaReserva" placeholder="Meta">
+<input type="number" id="valorReserva" placeholder="Atual">
+<button onclick="updateReserva()">Atualizar</button>
+<button class="remove" onclick="clearReserva()">Remover</button>
+<progress id="progReserva" value="0" max="100"></progress>
+<p id="txtReserva"></p>
+</div>
+
+<div class="card">
+<h3>Viagem</h3>
+<input type="number" id="metaViagem" placeholder="Meta">
+<input type="number" id="valorViagem" placeholder="Atual">
+<button onclick="updateViagem()">Atualizar</button>
+<button class="remove" onclick="clearViagem()">Remover</button>
+<progress id="progViagem" value="0" max="100"></progress>
+<p id="txtViagem"></p>
+</div>
+
+</div>
+
+<script>
+let dados=[];
+let filtroTipo='todos';
+let filtroPessoa='todos';
+let chart;
+
+function add(){
+  const d=descricao.value;
+  const v=parseFloat(valor.value);
+  if(!d||!v)return;
+  dados.push({d,v,t:tipo.value,p:pessoa.value});
+  descricao.value=valor.value='';
+  render();
+}
+
+function render(){
+  const lista=document.getElementById('lista');
+  lista.innerHTML='';
+  let ent=0,sai=0;
+
+  dados.forEach((l,i)=>{
+    if(filtroTipo!=='todos'&&l.t!==filtroTipo)return;
+    if(filtroPessoa!=='todos'&&l.p!==filtroPessoa)return;
+
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${l.p}</td><td>${l.d}</td><td>R$${l.v}</td><td>${l.t}</td>
+    <td><button class="remove" onclick="del(${i})">X</button></td>`;
+    lista.appendChild(tr);
+
+    l.t==='entrada'?ent+=l.v:sai+=l.v;
+  });
+
+  draw(ent,sai);
+}
+
+function del(i){dados.splice(i,1);render();}
+
+function draw(e,s){
+  if(chart)chart.destroy();
+  chart=new Chart(grafico,{
+    type:'doughnut',
+    data:{labels:['Entradas','Saídas'],datasets:[{data:[e,s]}]}
+  });
+}
+
+function updateReserva(){
+  const m=metaReserva.value,a=valorReserva.value;
+  const p=Math.min(a/m*100,100);
+  progReserva.value=p;txtReserva.innerText=p.toFixed(1)+'%';
+}
+function clearReserva(){metaReserva.value=valorReserva.value=0;progReserva.value=0;txtReserva.innerText='';}
+
+function updateViagem(){
+  const m=metaViagem.value,a=valorViagem.value;
+  const p=Math.min(a/m*100,100);
+  progViagem.value=p;txtViagem.innerText=p.toFixed(1)+'%';
+}
+function clearViagem(){metaViagem.value=valorViagem.value=0;progViagem.value=0;txtViagem.innerText='';}
+</script>
+
+</body>
+</html>
